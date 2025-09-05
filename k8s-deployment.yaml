@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-demo-app
+  namespace: gpu-demo
+  labels:
+    app: gpu-demo-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-demo-app
+  template:
+    metadata:
+      labels:
+        app: gpu-demo-app
+    spec:
+      containers:
+      - name: gpu-demo-app
+        image: gpu-demo:gpu
+        ports:
+        - containerPort: 5000
+        env:
+        - name: FORCE_CPU
+          value: "false"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+            nvidia.com/gpu: 1
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+      nodeSelector:
+        accelerator: nvidia-gpu
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+---
+# CPU fallback deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-demo-app-cpu
+  namespace: gpu-demo
+  labels:
+    app: gpu-demo-app-cpu
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-demo-app-cpu
+  template:
+    metadata:
+      labels:
+        app: gpu-demo-app-cpu
+    spec:
+      containers:
+      - name: gpu-demo-app
+        image: gpu-demo:cpu
+        ports:
+        - containerPort: 5000
+        env:
+        - name: FORCE_CPU
+          value: "true"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpu-demo-service
+  namespace: gpu-demo
+spec:
+  selector:
+    app: gpu-demo-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpu-demo-service-cpu
+  namespace: gpu-demo
+spec:
+  selector:
+    app: gpu-demo-app-cpu
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpu-demo-ingress
+  namespace: gpu-demo
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: gpu-demo.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: gpu-demo-service
+            port:
+              number: 80
+  - host: gpu-demo-cpu.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: gpu-demo-service-cpu
+            port:
+              number: 80
