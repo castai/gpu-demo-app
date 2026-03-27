@@ -2,6 +2,24 @@
 
 Generates a 600×600 Mandelbrot set image every 10 seconds using CUDA, serves it as PNG over HTTP on port 5000 (`GET /`).
 
+## Deploying on Kubernetes
+
+1. Run:
+
+```bash
+kubectl apply -f k8s-deployment.yaml
+```
+
+2. Access via port-forward
+
+```bash
+kubectl port-forward -n gpu-demo svc/gpu-demo-service 5000:5000
+```
+
+Then open your browser at `http://localhost:5000` — it will serve the latest Mandelbrot PNG.
+
+---
+
 ## Vendored header-only libraries
 
 Two header-only libraries must be placed in this directory before building.
