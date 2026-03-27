@@ -1,12 +1,8 @@
-// main.cpp — HTTP server + CPU Mandelbrot + background generation thread
+// main.cpp — HTTP server + GPU Mandelbrot + background generation thread
 //
 // Dependencies (header-only, see README.md for where to obtain them):
 //   httplib.h          — cpp-httplib  https://github.com/yhirose/cpp-httplib
 //   stb_image_write.h  — stb          https://github.com/nothings/stb
-//
-// Build targets (see CMakeLists.txt):
-//   gpu_demo   — CUDA-enabled, links mandelbrot.cu
-//   cpu_demo   — CPU only, compiled with -DFORCE_CPU
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -33,35 +29,6 @@ static_assert(sizeof(RGB) == 3, "RGB struct must be tightly packed");
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// CPU Mandelbrot implementation
-// ---------------------------------------------------------------------------
-
-void mandelbrot_cpu(const MandelbrotParams& p, RGB* pixels)
-{
-    for (int py = 0; py < p.height; ++py) {
-        for (int px = 0; px < p.width; ++px) {
-            double cr = p.x_min + (p.x_max - p.x_min) * (double)px / (double)(p.width  - 1);
-            double ci = p.y_min + (p.y_max - p.y_min) * (double)py / (double)(p.height - 1);
-
-            double zr = 0.0, zi = 0.0;
-            int iter = 0;
-
-            while (iter < p.max_iter) {
-                double zr2 = zr * zr;
-                double zi2 = zi * zi;
-                if (zr2 + zi2 > 4.0) break;
-                zi = 2.0 * zr * zi + ci;
-                zr = zr2 - zi2 + cr;
-                ++iter;
-            }
-
-            float t = (float)iter / (float)p.max_iter;
-            pixels[py * p.width + px] = apply_color_scheme(p.color_scheme, t);
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Image generator
 // ---------------------------------------------------------------------------
 
@@ -70,15 +37,7 @@ public:
     ImageGenerator()
         : rng_(std::random_device{}())
     {
-        // Determine whether FORCE_CPU env var is set
-#ifdef FORCE_CPU
-        use_cuda_ = false;
-#else
-        const char* env = std::getenv("FORCE_CPU");
-        bool force_cpu = env && (std::string(env) == "true" || std::string(env) == "1");
-        use_cuda_ = !force_cpu;  // will be validated on first GPU call
-#endif
-        std::printf("Generator initialized — using %s\n", use_cuda_ ? "CUDA" : "CPU");
+        std::puts("Generator initialized — using CUDA");
 
         // Generate the first image synchronously so the server has something to serve
         generate_image();
@@ -111,8 +70,7 @@ private:
     }
 
     MandelbrotParams random_params() {
-        std::uniform_int_distribution<int> iter_dist_gpu(80, 150);
-        std::uniform_int_distribution<int> iter_dist_cpu(50, 100);
+        std::uniform_int_distribution<int> iter_dist(80, 150);
         std::uniform_real_distribution<double> zoom_dist(0.5, 3.0);
         std::uniform_real_distribution<double> cx_dist(-2.0, 1.0);
         std::uniform_real_distribution<double> cy_dist(-1.5, 1.5);
@@ -121,7 +79,7 @@ private:
         MandelbrotParams p;
         p.width  = 600;
         p.height = 600;
-        p.max_iter    = use_cuda_ ? iter_dist_gpu(rng_) : iter_dist_cpu(rng_);
+        p.max_iter    = iter_dist(rng_);
         p.color_scheme = scheme_dist(rng_);
 
         double zoom     = zoom_dist(rng_);
@@ -144,22 +102,7 @@ private:
 
         auto t0 = std::chrono::steady_clock::now();
 
-        bool ok = false;
-
-#ifndef FORCE_CPU
-        if (use_cuda_) {
-            ok = mandelbrot_gpu(params, pixels.data());
-            if (!ok) {
-                std::puts("GPU computation failed, falling back to CPU");
-                use_cuda_ = false;
-            }
-        }
-#endif
-
-        if (!ok) {
-            mandelbrot_cpu(params, pixels.data());
-            ok = true;
-        }
+        mandelbrot_gpu(params, pixels.data());
 
         auto t1 = std::chrono::steady_clock::now();
         double elapsed = std::chrono::duration<double>(t1 - t0).count();
@@ -169,18 +112,11 @@ private:
         char ts[16];
         std::strftime(ts, sizeof(ts), "%H:%M:%S", std::localtime(&now_t));
 
-        if (elapsed > 30.0)
-            std::printf("Generation took %.2fs — too slow!\n", elapsed);
-        else if (elapsed > 20.0)
-            std::printf("Warning: generation took %.2fs — consider reducing parameters\n", elapsed);
-
-        std::printf("Generated 600x600 colorful Mandelbrot at %s (%.2fs)\n", ts, elapsed);
+        std::printf("Generated 600x600 Mandelbrot at %s (%.2fs)\n", ts, elapsed);
 
         // Encode to PNG
         std::vector<uint8_t> new_png;
-        new_png.reserve(n * 3);  // rough estimate
-        // stbi_write_png_to_func expects RGBA or RGB depending on comp
-        // comp=3 → RGB, stride_in_bytes = width * 3
+        new_png.reserve(n * 3);
         int stride = params.width * 3;
 
         int result = stbi_write_png_to_func(
@@ -204,7 +140,6 @@ private:
         }
     }
 
-    bool use_cuda_;
     std::mt19937 rng_;
     std::mutex mutex_;
     std::vector<uint8_t> png_buf_;
