@@ -1,82 +1,136 @@
-# GPU Demo App
+# GPU Demo App — C++ Version
 
-A geometric figure generator that creates **big, colorful, random** Mandelbrot fractals every 10 seconds with CUDA acceleration when available.
+A C++ port of the Python GPU demo app. Generates a 600×600 Mandelbrot set
+image every 10 seconds, serves it as PNG over HTTP on port 5000 (`GET /`).
 
-## Features
+## Vendored header-only libraries
 
-- ✅ **CUDA Acceleration** - Uses GPU when available, falls back to CPU
-- ✅ **Big Images** - 600x600 pixel high-resolution fractals
-- ✅ **Vibrant Colors** - 8 stunning color schemes (Rainbow, Fire, Ocean, Electric, etc.)
-- ✅ **Random Generation** - Different image every 10 seconds with random parameters
-- ✅ **Performance Optimized** - Generation guaranteed under 30 seconds
-- ✅ **Simple API** - Single endpoint returns PNG image
-- ✅ **Kubernetes Ready** - Complete deployment manifests included
+Two header-only libraries must be placed in this directory before building.
+They are **not** bundled here because of their file size / licensing — fetch
+them once with the commands below.
 
-## Quick Start
+### cpp-httplib (`httplib.h`)
 
-**Local (CPU):**
+Single-file C++11 HTTP/HTTPS server & client library.
+
 ```bash
-pip install -r requirements.txt
-./run.sh
+curl -L -o httplib.h \
+  https://raw.githubusercontent.com/yhirose/cpp-httplib/master/httplib.h
 ```
 
-**Local (GPU with CUDA):**
+- Repository: <https://github.com/yhirose/cpp-httplib>
+- License: MIT
+
+### stb_image_write (`stb_image_write.h`)
+
+Single-file PNG/BMP/TGA/JPG encoder from the stb collection.
+
 ```bash
-pip install -r requirements.txt
-python app.py
+curl -L -o stb_image_write.h \
+  https://raw.githubusercontent.com/nothings/stb/master/stb_image_write.h
 ```
 
-**Docker:**
+- Repository: <https://github.com/nothings/stb>
+- License: MIT / Public Domain (dual)
+
+---
+
+## Building locally (without Docker)
+
+### Prerequisites
+
+- CMake ≥ 3.18
+- A C++17-capable compiler (GCC 9+, Clang 10+, MSVC 19.14+)
+- For the GPU target: CUDA Toolkit ≥ 11.x and `nvcc`
+- The two header files above, placed in `cpp_version/`
+
+### CPU-only build
+
 ```bash
-./build.sh
-
-# GPU version (requires nvidia-docker)
-docker run --gpus all -p 5000:5000 gpu-demo:gpu
-
-# CPU version
-docker run -p 5000:5000 gpu-demo:cpu
+cd cpp_version
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DFORCE_CPU_ONLY=ON
+cmake --build build --target cpu_demo
+./build/cpu_demo
 ```
 
-**Kubernetes:**
+### GPU build
+
 ```bash
-# Deploy both GPU and CPU versions
-kubectl apply -f k8s-deployment.yaml
-
-# Access via port-forward
-kubectl port-forward -n gpu-demo service/gpu-demo-service 5000:80
+cd cpp_version
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target gpu_demo
+./build/gpu_demo
 ```
 
-## Usage
+Set the `PORT` environment variable to change the listening port (default 5000).
 
-Visit `http://localhost:5000/` to see the current generated image.
+---
 
-- **GPU mode**: ~2-15 seconds generation time (600x600, high detail)
-- **CPU mode**: ~5-25 seconds generation time (600x600, moderate detail)
-- **Auto-refresh**: New **random** image every 10 seconds
-- **Format**: **600x600 pixel** high-resolution PNG images
-- **Colors**: 8 vibrant schemes - Rainbow, Fire, Ocean, Electric, Sunset, Forest, Galaxy, Neon
-- **Variety**: Random zoom (0.5x-3x), center points, adaptive detail levels
-- **Performance**: Optimized to complete within 30 seconds maximum
+## Docker builds (via Makefile)
 
-## Architecture
+The Makefile mirrors the parent project's interface exactly.
 
-```
-┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
-│   HTTP Client   │───▶│  Flask API   │───▶│ Image Generator │
-└─────────────────┘    └──────────────┘    └─────────────────┘
-                                                     │
-                                                     ▼
-                                           ┌─────────────────┐
-                                           │ CUDA (GPU) OR   │
-                                           │ NumPy (CPU)     │
-                                           └─────────────────┘
+```bash
+# Build both images locally
+make all
+
+# Run the CPU image
+make run-cpu
+
+# Run the GPU image (requires NVIDIA Container Toolkit)
+make run-gpu
+
+# Push to a registry
+make push REGISTRY=docker.io/myorg TAG=v1.0
 ```
 
-## Files
+### Variables
 
-- `app.py` - Main application with CUDA support
-- `requirements.txt` - Dependencies (includes CuPy for CUDA)
-- `Dockerfile` - Multi-stage build (GPU + CPU)
-- `k8s-deployment.yaml` - Complete Kubernetes deployment
-- `build.sh` - Build script for both versions
-- `run.sh` - Local start script
+| Variable    | Default          | Description                         |
+|-------------|------------------|-------------------------------------|
+| `IMAGE`     | `gpu-demo-cpp`   | Base image name                     |
+| `TAG`       | `latest`         | Image tag                           |
+| `REGISTRY`  | *(empty)*        | Registry prefix, e.g. `docker.io/x` |
+| `CPU_IMAGE` | `$(IMAGE)-cpu:$(TAG)` | Full CPU image reference       |
+| `GPU_IMAGE` | `$(IMAGE)-gpu:$(TAG)` | Full GPU image reference       |
+
+All variables honour `?=` so environment variables take precedence.
+
+---
+
+## File structure
+
+```
+cpp_version/
+├── main.cpp            HTTP server + CPU Mandelbrot + background thread
+├── mandelbrot.cu       CUDA kernel (GPU Mandelbrot computation)
+├── mandelbrot.cuh      Shared header (params struct, color schemes, declarations)
+├── CMakeLists.txt      Build system (gpu_demo + cpu_demo targets)
+├── Dockerfile          Multi-stage: gpu-base / cpu-base
+├── Makefile            Docker build/push/run targets
+├── README.md           This file
+├── httplib.h           ← fetch with curl command above
+└── stb_image_write.h   ← fetch with curl command above
+```
+
+---
+
+## Behaviour
+
+- **Image size**: 600 × 600 pixels, RGB PNG
+- **Generation interval**: every 10 seconds (background thread)
+- **HTTP endpoint**: `GET /` → `image/png`
+- **Port**: 5000 (override with `PORT` env var)
+- **CUDA fallback**: if GPU computation fails at runtime, automatically falls
+  back to CPU for subsequent frames
+- **FORCE_CPU**: set `FORCE_CPU=true` (or `FORCE_CPU=1`) to skip CUDA even
+  when the `gpu_demo` binary was compiled with CUDA support
+- **Color schemes** (random per frame):
+  1. Rainbow spectrum
+  2. Fire (red-orange-yellow)
+  3. Ocean (blue-cyan-white)
+  4. Electric (purple-pink-cyan)
+  5. Sunset (orange-red-purple)
+  6. Forest (green-yellow-brown)
+  7. Galaxy (deep purple-blue-white)
+  8. Neon (bright cycling)

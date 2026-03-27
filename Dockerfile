@@ -1,48 +1,88 @@
-# Multi-stage build for GPU support
-FROM nvidia/cuda:11.8-devel-ubuntu20.04 as gpu-base
+# Multi-stage, multi-arch Dockerfile for C++ GPU demo app
+#
+# GPU target:  linux/amd64 only (CUDA requires x86_64)
+# CPU target:  linux/amd64 + linux/arm64
 
-# Set environment variables
+# ── Shared build argument for header-only vendored libraries ─────────────────
+# Both stages copy from the same source tree; no extra ARGs needed.
+
+# =============================================================================
+# GPU build stage — uses CUDA devel image so nvcc is available
+# =============================================================================
+FROM nvcr.io/nvidia/cuda:11.8.0-devel-ubuntu20.04 AS gpu-builder
+
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
 
-# Install Python and system dependencies
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-dev \
+        build-essential \
+        cmake \
+        ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symbolic link for python
-RUN ln -s /usr/bin/python3 /usr/bin/python
+WORKDIR /src
+COPY . .
+
+# Configure and build only the GPU target
+RUN cmake -S . -B build_gpu \
+        -DCMAKE_BUILD_TYPE=Release \
+        -G Ninja \
+    && cmake --build build_gpu --target gpu_demo -j"$(nproc)" --verbose
+
+# =============================================================================
+# GPU runtime image — much smaller than the devel image
+# =============================================================================
+FROM nvcr.io/nvidia/cuda:11.8.0-runtime-ubuntu20.04 AS gpu-base
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# libstdc++ and libgcc are needed to run the C++ binary
+RUN apt-get update && apt-get install -y \
+        libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
-# Copy requirements and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application
-COPY app.py .
+COPY --from=gpu-builder /src/build_gpu/gpu_demo /app/gpu_demo
 
 EXPOSE 5000
+CMD ["/app/gpu_demo"]
 
-CMD ["python", "app.py"]
+# =============================================================================
+# CPU build stage — plain Debian bookworm
+# =============================================================================
+FROM debian:bookworm-slim AS cpu-builder
 
-# CPU-only fallback stage
-FROM python:3.9-slim as cpu-base
+ENV DEBIAN_FRONTEND=noninteractive
 
-ENV PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y \
+        build-essential \
+        cmake \
+        ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+
+# Configure and build only the CPU target (FORCE_CPU is defined by CMakeLists
+# via target_compile_definitions, not by the env var at build time)
+RUN cmake -S . -B build_cpu \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DFORCE_CPU_ONLY=ON \
+        -G Ninja \
+    && cmake --build build_cpu --target cpu_demo -j"$(nproc)"
+
+# =============================================================================
+# CPU runtime image — minimal Debian bookworm
+# =============================================================================
+FROM debian:bookworm-slim AS cpu-base
+
 ENV FORCE_CPU=true
 
+RUN apt-get update && apt-get install -y \
+        libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-
-# Install only CPU dependencies
-COPY requirements.txt .
-RUN grep -v "cupy" requirements.txt > requirements-cpu.txt || echo "Flask==2.3.3\nnumpy==1.24.3\nPillow==10.0.1" > requirements-cpu.txt
-RUN pip install --no-cache-dir -r requirements-cpu.txt
-
-COPY app.py .
+COPY --from=cpu-builder /src/build_cpu/cpu_demo /app/cpu_demo
 
 EXPOSE 5000
-
-CMD ["python", "app.py"]
+CMD ["/app/cpu_demo"]

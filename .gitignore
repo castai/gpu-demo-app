@@ -1,29 +1,28 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
+# Build directories
 build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+build_cpu/
+build_gpu/
 
-# Virtual environments
-venv/
-env/
-ENV/
+# Compiled binaries
+gpu_demo
+cpu_demo
+*.o
+*.a
+*.so
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+
+# Ninja build files
+.ninja_deps
+.ninja_log
+build.ninja
 
 # IDE
 .vscode/
@@ -36,16 +35,8 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
 # Logs
 *.log
-
-# Docker
-.dockerignore
 
 # Kubernetes secrets (if any)
 *-secret.yaml

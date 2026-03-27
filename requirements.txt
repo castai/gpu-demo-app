@@ -1,5 +1,0 @@
-Flask==2.3.3
-numpy==1.24.3
-Pillow==10.0.1
-cupy-cuda11x==12.2.0; platform_machine == "x86_64"
-cupy-cuda12x==12.2.0; platform_machine == "x86_64"
