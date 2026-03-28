@@ -38,5 +38,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Vendored header-only libraries (fetched by Dockerfile)
+httplib.h
+stb_image_write.h
+
 # Kubernetes secrets (if any)
 *-secret.yaml

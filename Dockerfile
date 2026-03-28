@@ -7,10 +7,16 @@ RUN apt-get update && apt-get install -y \
         build-essential \
         cmake \
         ninja-build \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 COPY . .
+
+RUN curl -fsSL -o httplib.h \
+        https://raw.githubusercontent.com/yhirose/cpp-httplib/master/httplib.h \
+    && curl -fsSL -o stb_image_write.h \
+        https://raw.githubusercontent.com/nothings/stb/master/stb_image_write.h
 
 RUN cmake -S . -B build \
         -DCMAKE_BUILD_TYPE=Release \
