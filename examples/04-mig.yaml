@@ -2,7 +2,7 @@ apiVersion: resource.k8s.io/v1
 kind: ResourceClaimTemplate
 metadata:
   name: gpu-demo-mig
-  namespace: gpu-demo
+  namespace: gpu-demo-mig
 spec:
   spec:
     devices:
@@ -20,7 +20,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gpu-demo-mig
-  namespace: gpu-demo
+  namespace: gpu-demo-mig
 spec:
   replicas: 7
   selector:

@@ -1,8 +1,8 @@
 apiVersion: resource.k8s.io/v1
 kind: ResourceClaim
 metadata:
-  name: gpu-demo-app-gpu-ts
-  namespace: gpu-demo
+  name: gpu-demo-app-ts
+  namespace: gpu-demo-timeslicing
 spec:
   devices:
     requests:
@@ -31,7 +31,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gpu-demo-app-ts
-  namespace: gpu-demo
+  namespace: gpu-demo-timeslicing
 spec:
   replicas: 3
   selector:
@@ -44,7 +44,7 @@ spec:
     spec:
       resourceClaims:
       - name: ts-gpu
-        resourceClaimName: gpu-demo-app-gpu-ts
+        resourceClaimName: gpu-demo-app-ts
       containers:
       - name: gpu-demo-app
         image: ghcr.io/kasia-kujawa/gpu-demo-app:latest
