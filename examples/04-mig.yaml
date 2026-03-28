@@ -1,0 +1,52 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: gpu-demo-mig
+  namespace: gpu-demo
+spec:
+  spec:
+    devices:
+      requests:
+      - name: mig-1g-5gb
+        exactly:
+          deviceClassName: mig.nvidia.com
+          selectors:
+          - cel:
+              expression: |
+                device.attributes["gpu.nvidia.com"].profile == "1g.5gb"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-demo-mig
+  namespace: gpu-demo
+spec:
+  replicas: 7
+  selector:
+    matchLabels:
+      app: gpu-demo-mig
+  template:
+    metadata:
+      labels:
+        app: gpu-demo-mig
+    spec:
+      resourceClaims:
+      - name: mig-1g-5gb
+        resourceClaimTemplateName: gpu-demo-mig
+      containers:
+      - name: gpu-demo-app
+        image: ghcr.io/kasia-kujawa/gpu-demo-app:latest
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+          claims:
+          - name: mig-1g-5gb
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule

@@ -18,6 +18,8 @@ kubectl port-forward -n gpu-demo svc/gpu-demo-service 5000:5000
 
 Then open your browser at `http://localhost:5000` - it will serve the latest Mandelbrot PNG.
 
+More deployment examples can be found in the [`examples/`](./examples) directory.
+
 ## Vendored header-only libraries
 
 Two header-only libraries must be placed in this directory before building.

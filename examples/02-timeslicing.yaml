@@ -1,0 +1,69 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: gpu-demo-app-gpu-ts
+  namespace: gpu-demo
+spec:
+  devices:
+    requests:
+    - name: ts-gpu
+      exactly:
+        deviceClassName: gpu.nvidia.com
+        selectors:
+        - cel:
+            expression: |
+              device.attributes["gpu.nvidia.com"].architecture == "Ampere" &&
+              device.capacity["gpu.nvidia.com"].memory.isGreaterThan(quantity("20000Mi"))
+    config:
+    - requests: ["ts-gpu"]
+      opaque:
+        driver: gpu.nvidia.com
+        parameters:
+          apiVersion: resource.nvidia.com/v1beta1
+          kind: GpuConfig
+          sharing:
+            strategy: TimeSlicing
+            timeSlicingConfig:
+              interval: Long
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-demo-app-ts
+  namespace: gpu-demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: gpu-demo-app-ts
+  template:
+    metadata:
+      labels:
+        app: gpu-demo-app-ts
+    spec:
+      resourceClaims:
+      - name: ts-gpu
+        resourceClaimName: gpu-demo-app-gpu-ts
+      containers:
+      - name: gpu-demo-app
+        image: ghcr.io/kasia-kujawa/gpu-demo-app:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: FORCE_CPU
+          value: "false"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+          claims:
+          - name: ts-gpu
+            request: ts-gpu
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule

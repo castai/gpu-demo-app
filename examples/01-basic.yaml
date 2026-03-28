@@ -1,0 +1,68 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: gpu-demo-app-gpu
+  namespace: gpu-demo
+spec:
+  spec:
+    devices:
+      requests:
+      - name: gpu-0
+        exactly:
+          deviceClassName: gpu.nvidia.com
+          selectors:
+          - cel:
+              expression: |
+                device.attributes["gpu.nvidia.com"].architecture == "Ampere" &&
+                device.capacity["gpu.nvidia.com"].memory.isGreaterThan(quantity("20000Mi"))
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-demo-app
+  namespace: gpu-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-demo-app
+  template:
+    metadata:
+      labels:
+        app: gpu-demo-app
+    spec:
+      resourceClaims:
+      - name: gpu-0
+        resourceClaimTemplateName: gpu-demo-app-gpu
+      containers:
+      - name: gpu-demo-app
+        image: ghcr.io/kasia-kujawa/gpu-demo-app:latest
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+          claims:
+          - name: gpu-0
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpu-demo-service
+  namespace: gpu-demo
+spec:
+  selector:
+    app: gpu-demo-app
+  ports:
+  - port: 80
+    targetPort: 5000
