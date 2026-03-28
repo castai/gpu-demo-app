@@ -80,3 +80,7 @@ cmake --build build --target gpu_demo
 ```
 
 Set the `PORT` environment variable to change the listening port (default 5000).
+
+## License
+
+The project is released under the [Apache 2.0 License](LICENSE).
