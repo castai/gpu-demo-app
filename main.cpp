@@ -163,7 +163,31 @@ int main()
 
     httplib::Server svr;
 
-    svr.Get("/", [&generator](const httplib::Request& /*req*/, httplib::Response& res) {
+    svr.Get("/", [](const httplib::Request& /*req*/, httplib::Response& res) {
+        static const std::string html = R"(<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>GPU Demo — Mandelbrot</title>
+  <style>
+    body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    img  { display: block; }
+  </style>
+</head>
+<body>
+  <img id="fractal" src="/image" width="600" height="600">
+  <script>
+    setInterval(function() {
+      var img = document.getElementById('fractal');
+      img.src = '/image?t=' + Date.now();
+    }, 10000);
+  </script>
+</body>
+</html>)";
+        res.set_content(html, "text/html");
+    });
+
+    svr.Get("/image", [&generator](const httplib::Request& /*req*/, httplib::Response& res) {
         std::vector<uint8_t> png = generator.get_png();
         if (png.empty()) {
             res.status = 500;
