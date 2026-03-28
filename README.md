@@ -2,6 +2,8 @@
 
 Generates a 600×600 Mandelbrot set image every 10 seconds using CUDA, serves it as PNG over HTTP on port 5000 (`GET /`).
 
+![Mandelbrot fractal](fractal.png)
+
 ## Deploying on Kubernetes
 
 1. Run:
@@ -44,7 +46,7 @@ curl -L -o stb_image_write.h \
 # Build image locally
 make build
 
-# Run (requires NVIDIA Container Toolkit)
+# Run
 make run
 
 # Push to a registry
