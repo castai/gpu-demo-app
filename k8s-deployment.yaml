@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: gpu-demo-app
-        image: ghcr.io/YOUR_ORG/gpu-demo-app:latest
+        image: ghcr.io/castai/gpu-demo-app:latest
         ports:
         - containerPort: 5000
         resources:
