@@ -1,8 +1,13 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-demo-mps-volta
+---
 apiVersion: resource.k8s.io/v1
 kind: ResourceClaim
 metadata:
   name: gpu-demo-app-gpu-mps
-  namespace: gpu-demo-mps
+  namespace: gpu-demo-mps-volta
 spec:
   devices:
     requests:
@@ -12,8 +17,7 @@ spec:
         selectors:
         - cel:
             expression: |
-              device.attributes["gpu.nvidia.com"].architecture == "Ampere" &&
-              device.capacity["gpu.nvidia.com"].memory.isGreaterThan(quantity("20000Mi"))
+              device.attributes['gpu.nvidia.com'].productName.lowerAscii().matches('^.*(t4).*$') 
     config:
     - requests: ["mps-gpu"]
       opaque:
@@ -25,13 +29,14 @@ spec:
             strategy: MPS
             mpsConfig:
               defaultActiveThreadPercentage: 33
+              defaultPinnedDeviceMemoryLimit: 1Gi
 
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gpu-demo-app-mps
-  namespace: gpu-demo-mps
+  namespace: gpu-demo-mps-volta
 spec:
   replicas: 3
   selector:
@@ -51,12 +56,6 @@ spec:
         ports:
         - containerPort: 5000
         resources:
-          requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "1"
           claims:
           - name: mps-gpu
             request: mps-gpu

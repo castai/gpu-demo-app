@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-demo-mps-pre-volta
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: gpu-demo-app-gpu-mps
+  namespace: gpu-demo-mps-pre-volta
+spec:
+  devices:
+    requests:
+    - name: mps-gpu
+      exactly:
+        deviceClassName: gpu.nvidia.com
+        selectors:
+        - cel:
+            expression: |
+              device.attributes['gpu.nvidia.com'].productName.lowerAscii().matches('^.*(p4).*$') 
+    config:
+    - requests: ["mps-gpu"]
+      opaque:
+        driver: gpu.nvidia.com
+        parameters:
+          apiVersion: resource.nvidia.com/v1beta1
+          kind: GpuConfig
+          sharing:
+            strategy: MPS
+            mpsConfig:
+              defaultActiveThreadPercentage: 33
+              defaultPinnedDeviceMemoryLimit: 1Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-demo-app-mps
+  namespace: gpu-demo-mps-pre-volta
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: gpu-demo-app-mps
+  template:
+    metadata:
+      labels:
+        app: gpu-demo-app-mps
+    spec:
+      resourceClaims:
+      - name: mps-gpu
+        resourceClaimName: gpu-demo-app-gpu-mps
+      containers:
+      - name: gpu-demo-app
+        image: ghcr.io/castai/gpu-demo-app:latest
+        ports:
+        - containerPort: 5000
+        resources:
+          claims:
+          - name: mps-gpu
+            request: mps-gpu
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+

@@ -20,6 +20,7 @@ spec:
       labels:
         app: gpu-demo-app
     spec:
+      hostIPC: true
       containers:
       - name: gpu-demo-app
         image: ghcr.io/castai/gpu-demo-app:latest
@@ -48,8 +49,6 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 5
-      nodeSelector:
-        accelerator: nvidia-gpu
       tolerations:
       - key: nvidia.com/gpu
         operator: Exists
